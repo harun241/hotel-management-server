@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const app = express();
@@ -23,14 +22,17 @@ const client = new MongoClient(uri, {
 });
 
 let roomCollection;
-
+let reviewsCollection; 
+let bookingsCollection;  
 
 async function run() {
   try {
     const hoteldb = client.db('hoteldb');
 
     roomCollection = hoteldb.collection('FeaturedRooms');
-   
+    reviewsCollection = hoteldb.collection('reviews');     
+    bookingsCollection = hoteldb.collection('bookings');  
+
     console.log("Connected to MongoDB");
   } catch (error) {
     console.error("MongoDB connection error:", error);
@@ -45,7 +47,7 @@ app.get('/', (req, res) => {
 app.get('/hotels/top-rated', async (req, res) => {
   try {
     const topRatedRooms = await roomCollection
-      .find({ rating: { $gt: 4.5 } }) 
+      .find({ rating: { $gt: 4.7 } }) 
       .limit(6)
       .toArray();
 
@@ -66,12 +68,10 @@ app.get('/all-rooms', async (req, res) => {
   }
 });
 
-
 app.get("/api/rooms/:id", async (req, res) => {
   const { id } = req.params;
   try {
-
-     const room = await roomCollection.findOne({ _id: new ObjectId(id) });
+    const room = await roomCollection.findOne({ _id: new ObjectId(id) });
     if (!room) return res.status(404).json({ message: "Room not found" });
     res.json(room);
   } catch (err) {
@@ -81,19 +81,73 @@ app.get("/api/rooms/:id", async (req, res) => {
 });
 
 
+app.get('/api/reviews', async (req, res) => {
+  const { roomId } = req.query;
+  if (!roomId) return res.status(400).json({ message: "roomId query parameter is required" });
+
+  try {
+    const reviews = await reviewsCollection.find({ roomId }).toArray();
+    res.json(reviews);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 
+app.post('/api/reviews', async (req, res) => {
+  const { roomId, user, comment, rating } = req.body;
+  if (!roomId || !comment || !rating) {
+    return res.status(400).json({ message: "roomId, comment, and rating are required" });
+  }
+
+  try {
+    const review = { roomId, user: user || "Anonymous", comment, rating, createdAt: new Date() };
+    const result = await reviewsCollection.insertOne(review);
+    res.json({ success: true, reviewId: result.insertedId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to add review" });
+  }
+});
 
 
+app.post('/api/bookings', async (req, res) => {
+  const { roomId, userEmail, userName, bookingDate } = req.body;
 
+  if (!roomId || !userEmail || !bookingDate) {
+    return res.status(400).json({ success: false, message: "roomId, userEmail, and bookingDate are required" });
+  }
 
-
-
+  try {
  
+    const room = await roomCollection.findOne({ _id: new ObjectId(roomId) });
+    if (!room) return res.status(404).json({ success: false, message: "Room not found" });
 
 
- 
+    const existingBooking = await bookingsCollection.findOne({
+      roomId,
+      bookingDate: new Date(bookingDate),
+    });
+    if (existingBooking) {
+      return res.status(409).json({ success: false, message: "Room already booked for this date" });
+    }
 
+    const booking = {
+      roomId,
+      userEmail,
+      userName: userName || "Anonymous",
+      bookingDate: new Date(bookingDate),
+      createdAt: new Date(),
+    };
+
+    await bookingsCollection.insertOne(booking);
+    res.json({ success: true, message: "Room booked successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
