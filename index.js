@@ -67,6 +67,20 @@ app.get('/all-rooms', async (req, res) => {
 });
 
 
+app.get("/api/rooms/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+
+     const room = await roomCollection.findOne({ _id: new ObjectId(id) });
+    if (!room) return res.status(404).json({ message: "Room not found" });
+    res.json(room);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 
 
 
