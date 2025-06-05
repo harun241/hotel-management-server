@@ -177,6 +177,34 @@ app.get('/api/bookings', async (req, res) => {
 });
 
 
+
+// PATCH /api/bookings/:id
+app.patch('/api/bookings/:id', async (req, res) => {
+  const { id } = req.params;
+  const { bookingDate } = req.body;
+
+  if (!bookingDate) {
+    return res.status(400).json({ message: 'New booking date is required' });
+  }
+
+  try {
+    const result = await bookingsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { bookingDate } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Booking not found or date unchanged' });
+    }
+
+    res.json({ message: 'Booking date updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update booking date', error: error.message });
+  }
+});
+
+
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
