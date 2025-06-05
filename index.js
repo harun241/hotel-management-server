@@ -161,7 +161,7 @@ app.get('/api/bookings', async (req, res) => {
 
     const bookings = await bookingsCollection.find(filter).toArray();
 
-    // Fetch room data for each booking
+ 
     const bookingsWithRoom = await Promise.all(
       bookings.map(async (booking) => {
         const room = await roomCollection.findOne({ _id: new ObjectId(booking.roomId) });
@@ -178,7 +178,7 @@ app.get('/api/bookings', async (req, res) => {
 
 
 
-// PATCH /api/bookings/:id
+
 app.patch('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
   const { bookingDate } = req.body;
@@ -200,6 +200,23 @@ app.patch('/api/bookings/:id', async (req, res) => {
     res.json({ message: 'Booking date updated successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to update booking date', error: error.message });
+  }
+});
+
+
+app.delete('/api/bookings/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    res.json({ message: 'Booking deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting booking', error: err.message });
   }
 });
 
