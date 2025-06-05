@@ -149,6 +149,34 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
+
+
+app.get('/api/bookings', async (req, res) => {
+  const { roomId, userEmail } = req.query;
+
+  try {
+    let filter = {};
+    if (roomId) filter.roomId = roomId;
+    if (userEmail) filter.userEmail = userEmail;
+
+    const bookings = await bookingsCollection.find(filter).toArray();
+
+    // Fetch room data for each booking
+    const bookingsWithRoom = await Promise.all(
+      bookings.map(async (booking) => {
+        const room = await roomCollection.findOne({ _id: new ObjectId(booking.roomId) });
+        return { ...booking, room };
+      })
+    );
+
+    res.json(bookingsWithRoom);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
