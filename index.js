@@ -95,9 +95,6 @@ app.get('/api/reviews', async (req, res) => {
 });
 
 
-
-
-
 app.post('/api/bookings', async (req, res) => {
   const { roomId, userEmail, userName, bookingDate } = req.body;
 
@@ -106,10 +103,8 @@ app.post('/api/bookings', async (req, res) => {
   }
 
   try {
- 
     const room = await roomCollection.findOne({ _id: new ObjectId(roomId) });
     if (!room) return res.status(404).json({ success: false, message: "Room not found" });
-
 
     const existingBooking = await bookingsCollection.findOne({
       roomId,
@@ -135,8 +130,6 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-
-
 app.get('/api/bookings', async (req, res) => {
   const { roomId, userEmail } = req.query;
 
@@ -147,7 +140,6 @@ app.get('/api/bookings', async (req, res) => {
 
     const bookings = await bookingsCollection.find(filter).toArray();
 
- 
     const bookingsWithRoom = await Promise.all(
       bookings.map(async (booking) => {
         const room = await roomCollection.findOne({ _id: new ObjectId(booking.roomId) });
@@ -164,19 +156,34 @@ app.get('/api/bookings', async (req, res) => {
 
 
 
-
 app.patch('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
-  const { bookingDate } = req.body;
+  const { bookingDate, roomId } = req.body; 
 
   if (!bookingDate) {
     return res.status(400).json({ message: 'New booking date is required' });
   }
 
+  if (!roomId) {
+    return res.status(400).json({ message: 'roomId is required' });
+  }
+
   try {
+
+    const conflict = await bookingsCollection.findOne({
+      roomId,
+      bookingDate: new Date(bookingDate),
+      _id: { $ne: new ObjectId(id) }
+    });
+
+    if (conflict) {
+      return res.status(409).json({ message: 'Room already booked on this date' });
+    }
+
+
     const result = await bookingsCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { bookingDate } }
+      { $set: { bookingDate: new Date(bookingDate) } }
     );
 
     if (result.modifiedCount === 0) {
@@ -188,6 +195,7 @@ app.patch('/api/bookings/:id', async (req, res) => {
     res.status(500).json({ message: 'Failed to update booking date', error: error.message });
   }
 });
+
 
 
 app.delete('/api/bookings/:id', async (req, res) => {
@@ -206,7 +214,6 @@ app.delete('/api/bookings/:id', async (req, res) => {
   }
 });
 
-
 app.post('/api/reviews', async (req, res) => {
   const { roomId, userEmail, userName, rating, comment } = req.body;
 
@@ -215,20 +222,17 @@ app.post('/api/reviews', async (req, res) => {
   }
 
   try {
-    
     const booking = await bookingsCollection.findOne({ roomId, userEmail });
 
     if (!booking) {
       return res.status(403).json({ message: 'You can only review rooms you have booked.' });
     }
 
-  
     const existingReview = await reviewsCollection.findOne({ roomId, userEmail });
     if (existingReview) {
       return res.status(400).json({ message: 'You have already reviewed this room.' });
     }
 
-  
     const newReview = {
       roomId,
       userEmail,
@@ -246,7 +250,6 @@ app.post('/api/reviews', async (req, res) => {
     res.status(500).json({ message: 'Error submitting review.' });
   }
 });
-
 
 
 app.listen(port, () => {
