@@ -95,21 +95,7 @@ app.get('/api/reviews', async (req, res) => {
 });
 
 
-app.post('/api/reviews', async (req, res) => {
-  const { roomId, user, comment, rating } = req.body;
-  if (!roomId || !comment || !rating) {
-    return res.status(400).json({ message: "roomId, comment, and rating are required" });
-  }
 
-  try {
-    const review = { roomId, user: user || "Anonymous", comment, rating, createdAt: new Date() };
-    const result = await reviewsCollection.insertOne(review);
-    res.json({ success: true, reviewId: result.insertedId });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to add review" });
-  }
-});
 
 
 app.post('/api/bookings', async (req, res) => {
