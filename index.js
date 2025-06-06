@@ -221,6 +221,47 @@ app.delete('/api/bookings/:id', async (req, res) => {
 });
 
 
+app.post('/api/reviews', async (req, res) => {
+  const { roomId, userEmail, userName, rating, comment } = req.body;
+
+  if (!roomId || !userEmail || !rating || !comment) {
+    return res.status(400).json({ message: 'roomId, userEmail, rating, and comment are required' });
+  }
+
+  try {
+    
+    const booking = await bookingsCollection.findOne({ roomId, userEmail });
+
+    if (!booking) {
+      return res.status(403).json({ message: 'You can only review rooms you have booked.' });
+    }
+
+  
+    const existingReview = await reviewsCollection.findOne({ roomId, userEmail });
+    if (existingReview) {
+      return res.status(400).json({ message: 'You have already reviewed this room.' });
+    }
+
+  
+    const newReview = {
+      roomId,
+      userEmail,
+      userName: userName || 'Anonymous',
+      rating: Number(rating),
+      comment,
+      timestamp: new Date(),
+    };
+
+    await reviewsCollection.insertOne(newReview);
+
+    res.status(201).json({ message: 'Review submitted successfully.' });
+  } catch (error) {
+    console.error('Error submitting review:', error);
+    res.status(500).json({ message: 'Error submitting review.' });
+  }
+});
+
+
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
