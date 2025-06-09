@@ -252,6 +252,17 @@ app.post('/api/reviews', async (req, res) => {
 });
 
 
+app.get('/reviews', async (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+  const reviews = await reviewsCollection
+    .find()
+    .sort({ timestamp: -1 }) 
+    .limit(limit)
+    .toArray();
+  res.send(reviews);
+});
+
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
