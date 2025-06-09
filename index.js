@@ -1,10 +1,11 @@
 require('dotenv').config();
 const express = require('express');
-const app = express();
-
-const port = process.env.PORT || 3000;
+const moment = require('moment');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
+
+const app = express();
+const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
@@ -12,7 +13,6 @@ app.use(cors());
 
 // MongoDB URI and Client
 const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_Pass}@rjdvhav.mongodb.net/?retryWrites=true&w=majority&appName=hash`;
-
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -22,17 +22,15 @@ const client = new MongoClient(uri, {
 });
 
 let roomCollection;
-let reviewsCollection; 
-let bookingsCollection;  
+let reviewsCollection;
+let bookingsCollection;
 
 async function run() {
   try {
     const hoteldb = client.db('hoteldb');
-
     roomCollection = hoteldb.collection('FeaturedRooms');
-    reviewsCollection = hoteldb.collection('reviews');     
-    bookingsCollection = hoteldb.collection('bookings');  
-
+    reviewsCollection = hoteldb.collection('reviews');
+    bookingsCollection = hoteldb.collection('bookings');
     console.log("Connected to MongoDB");
   } catch (error) {
     console.error("MongoDB connection error:", error);
@@ -40,17 +38,16 @@ async function run() {
 }
 run().catch(console.dir);
 
+
+
 app.get('/', (req, res) => {
   res.send('🌿 hotel management server is running');
 });
 
+
 app.get('/hotels/top-rated', async (req, res) => {
   try {
-    const topRatedRooms = await roomCollection
-      .find({ rating: { $gt: 4.7 } }) 
-      .limit(6)
-      .toArray();
-
+    const topRatedRooms = await roomCollection.find({ rating: { $gt: 4.7 } }).limit(6).toArray();
     res.json(topRatedRooms);
   } catch (error) {
     console.error("Error in /hotels/top-rated:", error);
@@ -58,15 +55,17 @@ app.get('/hotels/top-rated', async (req, res) => {
   }
 });
 
+
 app.get('/all-rooms', async (req, res) => {
   try {
-    const allRooms = await roomCollection.find().toArray(); 
+    const allRooms = await roomCollection.find().toArray();
     res.json(allRooms);
   } catch (error) {
     console.error("Error in /all-rooms", error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 app.get("/api/rooms/:id", async (req, res) => {
   const { id } = req.params;
@@ -130,6 +129,7 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
+
 app.get('/api/bookings', async (req, res) => {
   const { roomId, userEmail } = req.query;
 
@@ -155,21 +155,15 @@ app.get('/api/bookings', async (req, res) => {
 });
 
 
-
 app.patch('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
-  const { bookingDate, roomId } = req.body; 
+  const { bookingDate, roomId } = req.body;
 
-  if (!bookingDate) {
-    return res.status(400).json({ message: 'New booking date is required' });
-  }
-
-  if (!roomId) {
-    return res.status(400).json({ message: 'roomId is required' });
+  if (!bookingDate || !roomId) {
+    return res.status(400).json({ message: 'bookingDate and roomId are required' });
   }
 
   try {
-
     const conflict = await bookingsCollection.findOne({
       roomId,
       bookingDate: new Date(bookingDate),
@@ -179,7 +173,6 @@ app.patch('/api/bookings/:id', async (req, res) => {
     if (conflict) {
       return res.status(409).json({ message: 'Room already booked on this date' });
     }
-
 
     const result = await bookingsCollection.updateOne(
       { _id: new ObjectId(id) },
@@ -197,22 +190,40 @@ app.patch('/api/bookings/:id', async (req, res) => {
 });
 
 
-
 app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+    const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
 
-    if (result.deletedCount === 0) {
+    if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    res.json({ message: 'Booking deleted successfully' });
+    const bookingDate = moment(booking.bookingDate);
+    const today = moment().startOf('day');
+    const latestCancellationDate = moment(bookingDate).subtract(1, 'days');
+
+    if (today.isAfter(latestCancellationDate)) {
+      return res.status(403).json({
+        message: 'Cancellation period has expired. You can only cancel at least 1 day before the booking date.',
+      });
+    }
+
+    const result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'Failed to delete the booking.' });
+    }
+
+    res.json({ message: 'Booking cancelled successfully and room is now available again.' });
+
   } catch (err) {
-    res.status(500).json({ message: 'Error deleting booking', error: err.message });
+    res.status(500).json({ message: 'Error cancelling booking', error: err.message });
   }
 });
+
+
 
 app.post('/api/reviews', async (req, res) => {
   const { roomId, userEmail, userName, rating, comment } = req.body;
@@ -252,11 +263,12 @@ app.post('/api/reviews', async (req, res) => {
 });
 
 
+
 app.get('/reviews', async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const reviews = await reviewsCollection
     .find()
-    .sort({ timestamp: -1 }) 
+    .sort({ timestamp: -1 })
     .limit(limit)
     .toArray();
   res.send(reviews);
