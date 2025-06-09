@@ -27,6 +27,7 @@ let bookingsCollection;
 
 async function run() {
   try {
+    await client.connect();
     const hoteldb = client.db('hoteldb');
     roomCollection = hoteldb.collection('FeaturedRooms');
     reviewsCollection = hoteldb.collection('reviews');
@@ -38,12 +39,9 @@ async function run() {
 }
 run().catch(console.dir);
 
-
-
 app.get('/', (req, res) => {
   res.send('🌿 hotel management server is running');
 });
-
 
 app.get('/hotels/top-rated', async (req, res) => {
   try {
@@ -55,7 +53,6 @@ app.get('/hotels/top-rated', async (req, res) => {
   }
 });
 
-
 app.get('/all-rooms', async (req, res) => {
   try {
     const allRooms = await roomCollection.find().toArray();
@@ -65,7 +62,6 @@ app.get('/all-rooms', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 app.get("/api/rooms/:id", async (req, res) => {
   const { id } = req.params;
@@ -79,20 +75,18 @@ app.get("/api/rooms/:id", async (req, res) => {
   }
 });
 
-
 app.get('/api/reviews', async (req, res) => {
   const { roomId } = req.query;
   if (!roomId) return res.status(400).json({ message: "roomId query parameter is required" });
 
   try {
-    const reviews = await reviewsCollection.find({ roomId }).toArray();
+    const reviews = await reviewsCollection.find({ roomId: new ObjectId(roomId) }).toArray();
     res.json(reviews);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 app.post('/api/bookings', async (req, res) => {
   const { roomId, userEmail, userName, bookingDate } = req.body;
@@ -105,19 +99,25 @@ app.post('/api/bookings', async (req, res) => {
     const room = await roomCollection.findOne({ _id: new ObjectId(roomId) });
     if (!room) return res.status(404).json({ success: false, message: "Room not found" });
 
+    const bookingDateObj = new Date(bookingDate);
+    if (isNaN(bookingDateObj.getTime())) {
+      return res.status(400).json({ success: false, message: "Invalid bookingDate" });
+    }
+
     const existingBooking = await bookingsCollection.findOne({
-      roomId,
-      bookingDate: new Date(bookingDate),
+      roomId: new ObjectId(roomId),
+      bookingDate: bookingDateObj,
     });
+
     if (existingBooking) {
       return res.status(409).json({ success: false, message: "Room already booked for this date" });
     }
 
     const booking = {
-      roomId,
+      roomId: new ObjectId(roomId),
       userEmail,
       userName: userName || "Anonymous",
-      bookingDate: new Date(bookingDate),
+      bookingDate: bookingDateObj,
       createdAt: new Date(),
     };
 
@@ -129,13 +129,12 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-
 app.get('/api/bookings', async (req, res) => {
   const { roomId, userEmail } = req.query;
 
   try {
     let filter = {};
-    if (roomId) filter.roomId = roomId;
+    if (roomId) filter.roomId = new ObjectId(roomId);
     if (userEmail) filter.userEmail = userEmail;
 
     const bookings = await bookingsCollection.find(filter).toArray();
@@ -156,39 +155,56 @@ app.get('/api/bookings', async (req, res) => {
 
 
 app.patch('/api/bookings/:id', async (req, res) => {
-  const { id } = req.params;
+  const bookingId = req.params.id;
   const { bookingDate, roomId } = req.body;
 
   if (!bookingDate || !roomId) {
-    return res.status(400).json({ message: 'bookingDate and roomId are required' });
+    return res.status(400).json({ message: "bookingDate and roomId are required" });
+  }
+
+  let bookingObjectId;
+  try {
+    bookingObjectId = new ObjectId(bookingId);
+  } catch (err) {
+    return res.status(400).json({ message: 'Invalid booking ID' });
   }
 
   try {
+    const room = await roomCollection.findOne({ _id: new ObjectId(roomId) });
+    if (!room) return res.status(404).json({ message: 'Room not found' });
+
+    const bookingDateObj = new Date(bookingDate);
+    if (isNaN(bookingDateObj.getTime())) {
+      return res.status(400).json({ message: "Invalid bookingDate" });
+    }
+
     const conflict = await bookingsCollection.findOne({
-      roomId,
-      bookingDate: new Date(bookingDate),
-      _id: { $ne: new ObjectId(id) }
+      roomId: new ObjectId(roomId),
+      bookingDate: bookingDateObj,
+      _id: { $ne: bookingObjectId },
     });
 
     if (conflict) {
-      return res.status(409).json({ message: 'Room already booked on this date' });
+      return res.status(409).json({ message: 'Date already booked for this room' });
     }
 
     const result = await bookingsCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { bookingDate: new Date(bookingDate) } }
+      { _id: bookingObjectId },
+      { $set: { bookingDate: bookingDateObj } }
     );
 
     if (result.modifiedCount === 0) {
-      return res.status(404).json({ message: 'Booking not found or date unchanged' });
+      return res.status(404).json({ message: 'Booking not found or no change' });
     }
 
-    res.json({ message: 'Booking date updated successfully' });
+    const updatedBooking = await bookingsCollection.findOne({ _id: bookingObjectId });
+    res.json(updatedBooking);
+
   } catch (error) {
-    res.status(500).json({ message: 'Failed to update booking date', error: error.message });
+    console.error('Error updating booking:', error);
+    res.status(500).json({ message: 'Failed to update booking' });
   }
 });
-
 
 app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
@@ -219,11 +235,10 @@ app.delete('/api/bookings/:id', async (req, res) => {
     res.json({ message: 'Booking cancelled successfully and room is now available again.' });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Error cancelling booking', error: err.message });
   }
 });
-
-
 
 app.post('/api/reviews', async (req, res) => {
   const { roomId, userEmail, userName, rating, comment } = req.body;
@@ -233,19 +248,19 @@ app.post('/api/reviews', async (req, res) => {
   }
 
   try {
-    const booking = await bookingsCollection.findOne({ roomId, userEmail });
+    const booking = await bookingsCollection.findOne({ roomId: new ObjectId(roomId), userEmail });
 
     if (!booking) {
       return res.status(403).json({ message: 'You can only review rooms you have booked.' });
     }
 
-    const existingReview = await reviewsCollection.findOne({ roomId, userEmail });
+    const existingReview = await reviewsCollection.findOne({ roomId: new ObjectId(roomId), userEmail });
     if (existingReview) {
       return res.status(400).json({ message: 'You have already reviewed this room.' });
     }
 
     const newReview = {
-      roomId,
+      roomId: new ObjectId(roomId),
       userEmail,
       userName: userName || 'Anonymous',
       rating: Number(rating),
@@ -262,18 +277,20 @@ app.post('/api/reviews', async (req, res) => {
   }
 });
 
-
-
 app.get('/reviews', async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
-  const reviews = await reviewsCollection
-    .find()
-    .sort({ timestamp: -1 })
-    .limit(limit)
-    .toArray();
-  res.send(reviews);
+  try {
+    const reviews = await reviewsCollection
+      .find()
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .toArray();
+    res.send(reviews);
+  } catch (error) {
+    console.error('Error fetching reviews:', error);
+    res.status(500).json({ message: 'Error fetching reviews.' });
+  }
 });
-
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
