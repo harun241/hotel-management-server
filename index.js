@@ -27,7 +27,7 @@ let bookingsCollection;
 
 async function run() {
   try {
-    await client.connect();
+    
     const hoteldb = client.db('hoteldb');
     roomCollection = hoteldb.collection('FeaturedRooms');
     reviewsCollection = hoteldb.collection('reviews');
