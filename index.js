@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const jwt = require('jsonwebtoken');
+const admin = require('firebase-admin');
 const moment = require('moment');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
@@ -8,10 +10,32 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
-// MongoDB URI and Client
+// Firebase Admin Initialization
+const serviceAccount = require('./firebase-admin.key.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+// Verify Firebase Token Middleware
+const VerifyFirebaseToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers?.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized access' });
+    }
+    const token = authHeader.split(' ')[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.tokenEmail = decoded.email;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
+};
+
+// MongoDB Connection
 const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_Pass}@rjdvhav.mongodb.net/?retryWrites=true&w=majority&appName=hash`;
 const client = new MongoClient(uri, {
   serverApi: {
@@ -27,7 +51,7 @@ let bookingsCollection;
 
 async function run() {
   try {
-    
+    await client.connect();
     const hoteldb = client.db('hoteldb');
     roomCollection = hoteldb.collection('FeaturedRooms');
     reviewsCollection = hoteldb.collection('reviews');
@@ -39,10 +63,20 @@ async function run() {
 }
 run().catch(console.dir);
 
+// JWT API
+app.post('/jwt', async (req, res) => {
+  const { email } = req.body;
+  const user = { email };
+  const token = jwt.sign(user, process.env.JWT_ACCESS_SECRET, { expiresIn: '1h' });
+  res.send({ token });
+});
+
+// Root route
 app.get('/', (req, res) => {
   res.send('🌿 hotel management server is running');
 });
 
+// Get Top Rated Hotels
 app.get('/hotels/top-rated', async (req, res) => {
   try {
     const topRatedRooms = await roomCollection.find({ rating: { $gt: 4.7 } }).limit(6).toArray();
@@ -53,6 +87,7 @@ app.get('/hotels/top-rated', async (req, res) => {
   }
 });
 
+// All Rooms
 app.get('/all-rooms', async (req, res) => {
   try {
     const allRooms = await roomCollection.find().toArray();
@@ -63,7 +98,8 @@ app.get('/all-rooms', async (req, res) => {
   }
 });
 
-app.get("/api/rooms/:id", async (req, res) => {
+// Room Details
+app.get('/api/rooms/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const room = await roomCollection.findOne({ _id: new ObjectId(id) });
@@ -75,6 +111,7 @@ app.get("/api/rooms/:id", async (req, res) => {
   }
 });
 
+// Get Reviews for a Room
 app.get('/api/reviews', async (req, res) => {
   const { roomId } = req.query;
   if (!roomId) return res.status(400).json({ message: "roomId query parameter is required" });
@@ -88,6 +125,7 @@ app.get('/api/reviews', async (req, res) => {
   }
 });
 
+// Book a Room
 app.post('/api/bookings', async (req, res) => {
   const { roomId, userEmail, userName, bookingDate } = req.body;
 
@@ -129,8 +167,14 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-app.get('/api/bookings', async (req, res) => {
+// Get Bookings (Protected)
+app.get('/api/bookings', VerifyFirebaseToken, async (req, res) => {
   const { roomId, userEmail } = req.query;
+  console.log('req header',req.headers);
+
+  if (req.tokenEmail !== userEmail) {
+    return res.status(403).send({ message: 'Forbidden access' });
+  }
 
   try {
     let filter = {};
@@ -153,7 +197,7 @@ app.get('/api/bookings', async (req, res) => {
   }
 });
 
-
+// Edit Booking Date
 app.patch('/api/bookings/:id', async (req, res) => {
   const bookingId = req.params.id;
   const { bookingDate, roomId } = req.body;
@@ -162,21 +206,12 @@ app.patch('/api/bookings/:id', async (req, res) => {
     return res.status(400).json({ message: "bookingDate and roomId are required" });
   }
 
-  let bookingObjectId;
   try {
-    bookingObjectId = new ObjectId(bookingId);
-  } catch (err) {
-    return res.status(400).json({ message: 'Invalid booking ID' });
-  }
+    const bookingObjectId = new ObjectId(bookingId);
+    const bookingDateObj = new Date(bookingDate);
 
-  try {
     const room = await roomCollection.findOne({ _id: new ObjectId(roomId) });
     if (!room) return res.status(404).json({ message: 'Room not found' });
-
-    const bookingDateObj = new Date(bookingDate);
-    if (isNaN(bookingDateObj.getTime())) {
-      return res.status(400).json({ message: "Invalid bookingDate" });
-    }
 
     const conflict = await bookingsCollection.findOne({
       roomId: new ObjectId(roomId),
@@ -206,15 +241,13 @@ app.patch('/api/bookings/:id', async (req, res) => {
   }
 });
 
+// Cancel Booking
 app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
     const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
-
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
-    }
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
     const bookingDate = moment(booking.bookingDate);
     const today = moment().startOf('day');
@@ -240,6 +273,7 @@ app.delete('/api/bookings/:id', async (req, res) => {
   }
 });
 
+// Post Review
 app.post('/api/reviews', async (req, res) => {
   const { roomId, userEmail, userName, rating, comment } = req.body;
 
@@ -277,6 +311,7 @@ app.post('/api/reviews', async (req, res) => {
   }
 });
 
+// Latest Reviews
 app.get('/reviews', async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   try {
@@ -292,6 +327,7 @@ app.get('/reviews', async (req, res) => {
   }
 });
 
+// Start Server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
