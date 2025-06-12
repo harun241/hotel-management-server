@@ -36,7 +36,8 @@ const VerifyFirebaseToken = async (req, res, next) => {
 };
 
 // MongoDB Connection
-const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_Pass}@rjdvhav.mongodb.net/?retryWrites=true&w=majority&appName=hash`;
+const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_Pass}@hash.rjdvhav.mongodb.net/hotelDB?retryWrites=true&w=majority&appName=hash`;
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -51,7 +52,7 @@ let bookingsCollection;
 
 async function run() {
   try {
-    await client.connect();
+
     const hoteldb = client.db('hoteldb');
     roomCollection = hoteldb.collection('FeaturedRooms');
     reviewsCollection = hoteldb.collection('reviews');
