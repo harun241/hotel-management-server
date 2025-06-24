@@ -1,0 +1,187 @@
+# 🏨 Hotel Booking Platform - Server Side
+
+This is the **server-side** application of the Hotel Booking Platform. It is built with **Node.js**, **Express.js**, and **MongoDB**, and provides a RESTful API for room management, top-rated hotels, bookings, reviews, and authentication.
+
+---
+
+## 📌 Features
+
+- 🔐 JWT-based Authentication
+- 🏠 Room and Top-Rated Hotel Listings
+- 📅 Room Booking and Cancellation
+- ⭐ Review System (only for booked rooms)
+- 🧑‍💻 Secure & Protected Routes
+- 🚀 Ready for Deployment (Render, Railway, Cyclic)
+
+---
+
+## ⚙️ Technologies Used
+
+- Node.js
+- Express.js
+- MongoDB (Mongoose)
+- JWT (JSON Web Tokens)
+- dotenv
+- CORS
+- bcrypt (if password auth used)
+- nodemon (for development)
+
+---
+
+## 📁 Project Structure
+
+server/
+│
+├── controllers/
+│ ├── authController.js
+│ ├── bookingController.js
+│ ├── reviewController.js
+│ └── roomController.js
+│
+├── models/
+│ ├── Booking.js
+│ ├── Review.js
+│ └── Room.js
+│
+├── routes/
+│ ├── authRoutes.js
+│ ├── bookingRoutes.js
+│ ├── reviewRoutes.js
+│ └── roomRoutes.js
+│
+├── middleware/
+│ └── verifyToken.js
+│
+├── .env
+├── index.js
+├── package.json
+└── README.md
+
+yaml
+Copy
+Edit
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/hotel-booking-server.git
+cd hotel-booking-server
+2. Install Dependencies
+bash
+Copy
+Edit
+npm install
+3. Create .env File
+env
+Copy
+Edit
+PORT=3000
+DB_URI=your_mongodb_connection_string
+ACCESS_TOKEN_SECRET=your_jwt_secret
+4. Start the Server
+bash
+Copy
+Edit
+npm run dev     # development (nodemon)
+npm start       # production
+🔐 Authentication
+http
+Copy
+Edit
+POST /jwt
+Payload:
+
+json
+Copy
+Edit
+{
+  "email": "user@example.com"
+}
+Header for Protected Routes:
+
+makefile
+Copy
+Edit
+Authorization: Bearer your_jwt_token
+🌐 API Endpoints
+🔹 Auth
+Method	Endpoint	Description
+POST	/jwt	Generate JWT token
+
+🔹 Rooms & Hotels
+Method	Endpoint	Description
+GET	/hotels/top-rated	Get top-rated hotels
+GET	/all-rooms	Get all available rooms
+GET	/api/rooms/:id	Get a room by ID
+
+🔹 Bookings
+Method	Endpoint	Description
+POST	/api/bookings	Book a room
+GET	/api/bookings	Get all bookings (admin)
+GET	/api/bookings/:email	Get bookings by user email
+DELETE	/api/bookings/:id	Cancel a booking by ID
+
+🔹 Reviews
+Method	Endpoint	Description
+GET	/api/reviews	Get all reviews
+POST	/api/reviews	Post a review (requires booking)
+
+📄 Sample Payloads
+✅ Booking
+json
+Copy
+Edit
+{
+  "email": "user@example.com",
+  "roomId": "665f95d1e57f8aebc22c45a0",
+  "date": "2025-07-01"
+}
+✅ Review
+json
+Copy
+Edit
+{
+  "roomId": "665f95d1e57f8aebc22c45a0",
+  "username": "Harun",
+  "rating": 4,
+  "comment": "Nice and clean room!",
+  "timestamp": "2025-06-25T12:00:00Z"
+}
+📦 Scripts
+bash
+Copy
+Edit
+npm run dev     # development (nodemon)
+npm start       # production
+🌍 Deployment
+You can deploy this backend on:
+
+Render
+
+Railway
+
+Cyclic
+
+Set environment variables in dashboard:
+
+PORT
+
+DB_URI
+
+ACCESS_TOKEN_SECRET
+
+🧑‍💻 Author
+Md Harun-or-Rashid
+📧 Email: omdharun6@gmail.com
+🔗 LinkedIn
+
+🪪 License
+This project is licensed under the MIT License.
+
+yaml
+Copy
+Edit
