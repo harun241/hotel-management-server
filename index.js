@@ -89,7 +89,7 @@ app.get('/hotels/top-rated', async (req, res) => {
 });
 
 // All Rooms
-app.get('/all-rooms', async (req, res) => {
+app.get('/api/all-rooms', async (req, res) => {
   try {
     const allRooms = await roomCollection.find().toArray();
     res.json(allRooms);
